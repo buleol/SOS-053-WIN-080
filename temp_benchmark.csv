@@ -1,0 +1,6 @@
+"Iter","User","Logon_Sec","ProfSvc_ms","DiskRead_KB","DiskWrite_KB","SMB_KB","NTUSER_ms"
+1,"BenchUser_Temp",22.81,671,34622,19824,8,28.42
+2,"BenchUser_Temp",21.72,632,24834,16245,7,2.11
+3,"BenchUser_Temp",20.84,591,15662,12454,6,1.65
+4,"BenchUser_Temp",19.91,566,11256,8654,7,1.45
+5,"BenchUser_Temp",18.89,533,5884,4228,6,1.31

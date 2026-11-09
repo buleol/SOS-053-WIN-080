@@ -1,10 +1,11 @@
-﻿$TargetIP   = "192.168.56.30"
+$TargetIP   = "192.168.56.30"
 $Username   = "BenchUser_RUP"
 $Domain     = "LAB"
 $UserPass   = "BenchPass2026!"
 $AdminUser  = "$Domain\Администратор"
 $AdminPass  = "P@ssw0rd"
 $Iterations = 5
+$FlagFile   = "\\192.168.56.20\ReadyFlags$\$Username`_ready.flag"
 
 $secPass = ConvertTo-SecureString $AdminPass -AsPlainText -Force
 $cred    = New-Object System.Management.Automation.PSCredential ($AdminUser, $secPass)
@@ -31,6 +32,7 @@ for ($k = 1; $k -le $Iterations; $k++) {
     } -ArgumentList $Username
 
     Start-Sleep -Seconds 2
+    if (Test-Path $FlagFile) { Remove-Item $FlagFile -Force -ErrorAction SilentlyContinue }
     Write-Host " -> Открываем RDP и ждем загрузку профиля с SMB-шары..." -ForegroundColor Gray
 
     $StartTime  = Get-Date
@@ -38,12 +40,13 @@ for ($k = 1; $k -le $Iterations; $k++) {
     $LoadedProc = $null
 
     for ($i = 0; $i -lt 80; $i++) {
-        $LoadedProc = Invoke-Command -Session $Session -ScriptBlock {
-            param($u)
-            Get-Process explorer -IncludeUserName -ErrorAction SilentlyContinue | Where-Object UserName -match $u | Select-Object -First 1
-        } -ArgumentList $Username -ErrorAction SilentlyContinue
-
-        if ($LoadedProc) { break }
+        if (Test-Path $FlagFile) {
+            $LoadedProc = Invoke-Command -Session $Session -ScriptBlock {
+                param($u)
+                Get-Process explorer -IncludeUserName -ErrorAction SilentlyContinue | Where-Object UserName -match $u | Select-Object -First 1
+            } -ArgumentList $Username -ErrorAction SilentlyContinue
+            break
+        }
         Start-Sleep -Milliseconds 500
     }
 
