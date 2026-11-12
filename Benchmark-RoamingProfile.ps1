@@ -23,17 +23,17 @@ for ($k = 1; $k -le $Iterations; $k++) {
         param($u)
         Get-Process explorer -IncludeUserName -ErrorAction SilentlyContinue | Where-Object UserName -match $u | ForEach-Object { logoff $_.SessionId }
         $disk = Get-CimInstance Win32_PerfRawData_PerfDisk_PhysicalDisk -Filter "Name='_Total'"
-        $smb  = Get-CimInstance Win32_PerfRawData_PerfNet_Server
+        $smbSample = (Get-Counter "\SMB Client Shares(*)\Read Bytes" -ErrorAction SilentlyContinue).CounterSamples | Measure-Object -Property CookedValue -Sum
         [PSCustomObject]@{
             ReadBytes  = [int64]$disk.DiskReadBytesPersec
             WriteBytes = [int64]$disk.DiskWriteBytesPersec
-            SmbBytes   = [int64]$smb.BytesTotalPersec
+            SmbBytes   = if ($smbSample.Sum) { [int64]$smbSample.Sum } else { 0 }
         }
     } -ArgumentList $Username
 
     Start-Sleep -Seconds 2
     if (Test-Path $FlagFile) { Remove-Item $FlagFile -Force -ErrorAction SilentlyContinue }
-    Write-Host " -> Открываем RDP и ждем загрузку профиля с SMB-шары..." -ForegroundColor Gray
+    Write-Host " -> Открываем RDP и ждем маркер SignalReady с SMB-шары..." -ForegroundColor Gray
 
     $StartTime  = Get-Date
     $rdp        = Start-Process -FilePath "mstsc" -ArgumentList "/v:$TargetIP" -PassThru
@@ -58,11 +58,12 @@ for ($k = 1; $k -le $Iterations; $k++) {
             param($u, $sId, $bRead, $bWrite, $bSmb)
 
             $disk2 = Get-CimInstance Win32_PerfRawData_PerfDisk_PhysicalDisk -Filter "Name='_Total'"
-            $smb2  = Get-CimInstance Win32_PerfRawData_PerfNet_Server
+            $smbSample2 = (Get-Counter "\SMB Client Shares(*)\Read Bytes" -ErrorAction SilentlyContinue).CounterSamples | Measure-Object -Property CookedValue -Sum
+            $curSmb = if ($smbSample2.Sum) { [int64]$smbSample2.Sum } else { 0 }
 
-            $dReadKB  = [math]::Max(0, [math]::Round((([int64]$disk2.DiskReadBytesPersec - $bRead) / 1024), 1))
-            $dWriteKB = [math]::Max(0, [math]::Round((([int64]$disk2.DiskWriteBytesPersec - $bWrite) / 1024), 1))
-            $smbKB    = [math]::Max(0, [math]::Round((([int64]$smb2.BytesTotalPersec - $bSmb) / 1024), 1))
+            $dReadKB  = [math]::Max(0, [math]::Round((([int64]$disk2.DiskReadBytesPersec - $bRead) / 1024), 0))
+            $dWriteKB = [math]::Max(0, [math]::Round((([int64]$disk2.DiskWriteBytesPersec - $bWrite) / 1024), 0))
+            $smbKB    = [math]::Max(0, [math]::Round((($curSmb - $bSmb) / 1024), 0))
 
             $ev1 = Get-WinEvent -FilterHashtable @{LogName='Microsoft-Windows-User Profile Service/Operational'; ID=1} -MaxEvents 1 -ErrorAction SilentlyContinue
             $ev2 = Get-WinEvent -FilterHashtable @{LogName='Microsoft-Windows-User Profile Service/Operational'; ID=2} -MaxEvents 1 -ErrorAction SilentlyContinue
@@ -136,4 +137,4 @@ Remove-PSSession $Session
 cmdkey /delete:TERMSRV/$TargetIP
 
 $Report | Format-Table -AutoSize
-$Report | Export-Csv -Path "C:\Benchmark\rup_benchmark.csv" -NoTypeInformation -Encoding UTF8
+$Report | Export-Csv -Path "rup_benchmark.csv" -NoTypeInformation -Encoding UTF8
